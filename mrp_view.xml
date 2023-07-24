@@ -2,6 +2,20 @@
 <odoo>
 
 
+    <record id="bom_costs_mrp_bom_tree" model="ir.ui.view">
+        <field name="name">bom.costs.mrp.bom.tree</field>
+        <field name="model">mrp.bom</field>
+        <field name="inherit_id" ref="mrp.mrp_bom_tree_view"></field>
+	<field name="arch" type="xml">
+		<xpath expr="//field[@name='product_qty']" position="after">
+			<field name="total_cost" optional="hide" />
+			<field name="indirect_cost" optional="hide" />
+			<field name="direct_cost" optional="hide" />
+		</xpath>
+        </field>
+    </record>
+
+
 	<record model="ir.ui.view" id="mrp_bom_cost_form">
 		<field name="name">mrp.bom.cost.form</field>
 		<field name="model">mrp.bom.cost</field>
@@ -11,6 +25,9 @@
 					<button name="btn_fill_components"
 						type="object"
 						string="Buscar componentes" />
+					<button name="btn_update_costs"
+						type="object"
+						string="Actualizar costos" />
 				</header>
 				<sheet>
 					<group>
@@ -28,12 +45,13 @@
 								<tree editable="bottom" create="0" delete="0">
 									<field name="product_id" readonly="1"/>
 									<field name="uom_id" readonly="1"/>
-									<field name="standard_price" readonly="1"/>
-									<field name="direct_cost" optional="hide" readonly="1"/>
-									<field name="indirect_cost" optional="hide" readonly="1"/>
-									<field name="total_cost" readonly="0"/>
-									<field name="total_direct_cost" optional="hide" readonly="1"/>
-									<field name="total_indirect_cost" optional="hide" readonly="1"/>
+									<field name="line_type" readonly="1"/>
+									<field name="standard_price" readonly="0"/>
+									<field name="direct_cost" optional="hide" readonly="0"/>
+									<field name="indirect_cost" optional="hide" readonly="0"/>
+									<!-- field name="total_cost" readonly="0"/>
+									<field name="total_direct_cost" optional="hide" readonly="0"/>
+									<field name="total_indirect_cost" optional="hide" readonly="0"/ -->
 									<field name="qty" readonly="1"/>
 								</tree>
 							</field>
@@ -80,6 +98,30 @@
 		action="action_mrp_bom_cost"
 		sequence="100"/>
 
+
+
+        <record model="ir.ui.view" id="bom_product_product_cost_tree">
+		<field name="name">bom.product.product.cost.tree</field>
+		<field name="model">product.product.cost</field>
+		<field name="inherit_id" ref="purchase_indirect_costs.product_product_cost_tree"></field>
+                <field name="arch" type="xml">
+                        <field name="order_id" position="after">
+                                <field name="cost_id" />
+			</field>
+                </field>
+	</record>
+
+
+    <record id="bom_indirect_costs_product_product_form" model="ir.ui.view">
+        <field name="name">bom.indirect.costs.product.product.form</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="purchase_indirect_costs.indirect_costs_product_product_form"></field>
+        <field name="arch" type="xml">
+		<xpath expr="//field[@name='cost_ids']/tree/field[@name='order_id']" position="after">
+                	<field name="cost_id" />
+                </xpath>
+        </field>
+    </record>
 
 
 </odoo>
