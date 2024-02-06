@@ -22,12 +22,24 @@
 		<field name="arch" type="xml">
 			<form string="Costos">
 				<header>
+					<field name="only_components" invisible="1" />
 					<button name="btn_fill_components"
 						type="object"
 						string="Buscar componentes" />
 					<button name="btn_update_costs"
 						type="object"
 						string="Actualizar costos" />
+					<button name="btn_show_components"
+						type="object"
+						attrs="{'invisible': [('only_components','=',True)]}"
+						string="Mostrar Sub-assemblies" />
+					<button name="btn_show_all_items"
+						type="object"
+						attrs="{'invisible': [('only_components','=',False)]}"
+						string="Mostrar Todo" />
+					<button name="btn_show_first_level"
+						type="object"
+						string="Mostrar 1er Nivel" />
 				</header>
 				<sheet>
 					<group>
@@ -36,23 +48,31 @@
 						<field name="product_tmpl_id" />
 						<field name="product_id" />
 						<field name="date" />
-						<field name="qty" />
+						<field name="qty" readonly="1"/>
 					</group>
 					<notebook>
 						<page string="Componentes">
 							<br />
 							<field name="line_ids" >
 								<tree editable="bottom" create="0" delete="0">
+									<field name="line_item" optional="hide" />
 									<field name="product_id" readonly="1"/>
-									<field name="uom_id" readonly="1"/>
+									<field name="bom_id" optional="hide"/>
+									<field name="uom_id" readonly="1" optional="hide"/>
+									<field name="tag_ids" widget="many2many_tags" />
 									<field name="line_type" readonly="1"/>
-									<field name="standard_price" readonly="0"/>
+									<field name="price_unit" readonly="0"/>
 									<field name="direct_cost" optional="hide" readonly="0"/>
 									<field name="indirect_cost" optional="hide" readonly="0"/>
-									<!-- field name="total_cost" readonly="0"/>
-									<field name="total_direct_cost" optional="hide" readonly="0"/>
+									<field name="total_cost" readonly="1" invisible="1"/>
+									<!-- field name="total_direct_cost" optional="hide" readonly="0"/>
 									<field name="total_indirect_cost" optional="hide" readonly="0"/ -->
 									<field name="qty" readonly="1"/>
+									<field name="update_date" optional="hide" readonly="0"/>
+									<button name="show_document" 
+										string="Mostrar"
+										optional="hide"
+										type="object" />
 								</tree>
 							</field>
 						</page>
@@ -82,6 +102,7 @@
 				<field name="product_id" optional="hide"/>
 				<field name="date" />
 				<field name="qty" />
+				<field name="total_cost" />
 			</tree>
 		</field>
 	</record>
@@ -90,38 +111,13 @@
 		<field name="name">Costos de Productos</field>
 		<field name="res_model">mrp.bom.cost</field>
 		<field name="view_mode">tree,form</field>
+		<field name="domain">[('temporary','=',True)]</field>
 	</record>
 
 
-	<menuitem name="Costos" id="product_upload_prices_menu"
+	<menuitem name="Costos" id="menu_mrp_bom_costs"
 		parent="mrp.menu_mrp_bom"
 		action="action_mrp_bom_cost"
 		sequence="100"/>
-
-
-
-        <record model="ir.ui.view" id="bom_product_product_cost_tree">
-		<field name="name">bom.product.product.cost.tree</field>
-		<field name="model">product.product.cost</field>
-		<field name="inherit_id" ref="purchase_indirect_costs.product_product_cost_tree"></field>
-                <field name="arch" type="xml">
-                        <field name="order_id" position="after">
-                                <field name="cost_id" />
-			</field>
-                </field>
-	</record>
-
-
-    <record id="bom_indirect_costs_product_product_form" model="ir.ui.view">
-        <field name="name">bom.indirect.costs.product.product.form</field>
-        <field name="model">product.product</field>
-        <field name="inherit_id" ref="purchase_indirect_costs.indirect_costs_product_product_form"></field>
-        <field name="arch" type="xml">
-		<xpath expr="//field[@name='cost_ids']/tree/field[@name='order_id']" position="after">
-                	<field name="cost_id" />
-                </xpath>
-        </field>
-    </record>
-
 
 </odoo>

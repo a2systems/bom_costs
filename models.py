@@ -12,10 +12,10 @@ class MrpBom(models.Model):
         for bom_line in self.bom_line_ids:
             if not bom_line.product_id.bom_ids:
                 if bom_line.product_id.id not in product_dict:
-                    product_dict[bom_line.product_id.id] = ['Component',bom_line.product_qty]
+                    product_dict[bom_line.product_id.id] = ['Component',bom_line.product_qty,self.id]
             else:
                 if bom_line.product_id.id not in product_dict:
-                    product_dict[bom_line.product_id.id] = ['Sub-assembly - %s'%(bom_line.product_id.display_name),bom_line.product_qty]
+                    product_dict[bom_line.product_id.id] = ['Sub-assembly - %s'%(bom_line.product_id.display_name),bom_line.product_qty,self.id]
                 new_bom = bom_line.product_id.bom_ids[0]
                 product_dict = new_bom._get_bom_all_product_qties_dict(product_dict)
         return product_dict
@@ -29,7 +29,7 @@ class MrpBom(models.Model):
 
     def update_product_costs(self):
         for rec in self:
-            product_ids = self.env['product.product'].search([('product_tmpl_id','=',rec.id)])
+            product_ids = self.env['product.product'].search([('product_tmpl_id','=',rec.product_tmpl_id.id)])
             for product_id in product_ids:
                 vals = {
                     'standard_price': rec.total_cost,
@@ -48,9 +48,9 @@ class MrpBomCost(models.Model):
 
     def btn_update_costs(self):
         self.ensure_one()
-        for line in self.line_ids:
+        for line in self.line_ids.filtered(lambda l: l.bom_id.id == self.bom_id.id):
             product_id = line.product_id
-            product_id.standard_price = line.standard_price
+            product_id.standard_price = line.price_unit
             product_id.indirect_cost = line.indirect_cost
             product_id.direct_cost = line.direct_cost
             cost_id = self.env['product.product.cost'].search([('cost_id','=',self.id),('product_id','=',product_id.id)])
@@ -78,13 +78,16 @@ class MrpBomCost(models.Model):
         products = self.bom_id._get_bom_all_product_qties_dict({})
         for key,values in products.items():
             product = self.env['product.product'].browse(key)
+            price_unit = product.standard_price
             vals = { 
                     'cost_id': self.id,
                     'product_id': key,
+                    'bom_id': values[2],
                     'qty': values[1] * self.qty,
                     'standard_price': product.standard_price,
                     'line_type': values[0],
-                    'total_cost': product.standard_price * values[1] * self.qty,
+                    'price_unit': price_unit,
+                    'total_cost': price_unit * values[1] * self.qty,
                     'uom_id': self.env['product.product'].browse(key).uom_id.id,
                     }
             line_id = self.env['mrp.bom.cost.line'].create(vals)
@@ -96,13 +99,37 @@ class MrpBomCost(models.Model):
             res = 0
             res1 = 0
             res2 = 0
-            for item in rec.line_ids:
-                res = res + item.total_cost
+            for item in rec.line_ids.filtered(lambda l: l.bom_id.id == rec.bom_id.id):
+                res = res + item.price_unit * item.qty
                 res1 = res1 + item.total_direct_cost
                 res2 = res2 + item.total_indirect_cost
             rec.total_cost = res
             rec.total_direct_cost = res1
             rec.total_indirect_cost = res2
+
+    def btn_show_components(self):
+        self.ensure_one()
+        self.only_components = True
+        for line in self.line_ids:
+            if not line.product_id.bom_ids:
+                line.active = False
+
+    def btn_show_all_items(self):
+        self.ensure_one()
+        self.only_components = False
+        lines = self.env['mrp.bom.cost.line'].search([('cost_id','=',self.id),('active','=',False)])
+        for line in lines:
+            line.active = True
+
+    def btn_show_first_level(self):
+        self.ensure_one()
+        self.only_components = True
+        lines = self.env['mrp.bom.cost.line'].search([('cost_id','=',self.id),'|',('active','=',False),('active','=',True)])
+        lines.write({'active': True})
+        lines = self.env['mrp.bom.cost.line'].search([('cost_id','=',self.id),('bom_id','!=',self.bom_id.id)])
+        lines.write({'active': False})
+
+
 
     name = fields.Char('Nombre')
     bom_id = fields.Many2one('mrp.bom',string='Lista de Materiales')
@@ -114,6 +141,8 @@ class MrpBomCost(models.Model):
     total_cost = fields.Float('Costo Total',compute=_compute_items)
     total_direct_cost = fields.Float('Costo Directo Total',compute=_compute_items)
     total_indirect_cost = fields.Float('Costo Indirecto Total',compute=_compute_items)
+    temporary = fields.Boolean('temporary',default=False)
+    only_components = fields.Boolean('Only components',default=False)
 
 class MrpBomCostLine(models.Model):
     _name = 'mrp.bom.cost.line'
@@ -133,9 +162,64 @@ class MrpBomCostLine(models.Model):
             rec.total_direct_cost = res1 * rec.qty
             rec.total_indirect_cost = res2 * rec.qty
 
+    def _compute_update_date(self):
+        for rec in self:
+            res = None
+            if rec.product_id.cost_ids:
+                res = str(rec.product_id.cost_ids[0].write_date)[:10]
+            rec.update_date = res
+
+    def _compute_line_item(self):
+        for rec in self:
+            res = 0
+            items = self.env['mrp.bom.cost.line'].search([('cost_id','=',rec.cost_id.id),('id','<',rec.id)])
+            if items:
+                res = len(items)
+            rec.line_item = res + 1
+
+    def show_document(self):
+        self.ensure_one()
+        if self.line_type == 'Component':
+            view_id = self.env.ref('product.product_normal_form_view').id
+            res_model = 'product.product'
+            res_id = self.product_id.id
+            return {
+                'name': _('Show document'),
+                'res_model': res_model,
+                'view_mode': 'form',
+                'res_id': res_id,
+                'type': 'ir.actions.act_window',
+                'target': 'new',
+            }
+        else:
+            view_id = self.env.ref('mrp_bom_costs.mrp_bom_cost_form').id
+            res_model = 'mrp.bom.cost'
+            vals = {
+                    'name': self.product_id.name,
+                    'bom_id': self.product_id.bom_ids[0].id,
+                    'product_id': self.product_id.id,
+                    'product_tmpl_id': self.product_id.product_tmpl_id.id,
+                    'qty': self.qty,
+                    'temporary': True,
+                    }
+            res_id = self.env['mrp.bom.cost'].create(vals)
+            res_id.btn_fill_components()
+            return {
+                'name': _('Show document'),
+                'res_model': 'mrp.bom.cost',
+                'view_mode': 'form',
+                'res_id': res_id.id,
+                'type': 'ir.actions.act_window',
+                'target': 'new',
+            }
+
+
+    line_item = fields.Integer('#',compute=_compute_line_item)
     cost_id = fields.Many2one('mrp.bom.cost',string='Costo')
     product_id = fields.Many2one('product.product',string='Componente')
+    bom_id = fields.Many2one('mrp.bom',string='BoM')
     qty = fields.Float('Cantidad')
+    price_unit = fields.Float('Precio Unitario')
     standard_price = fields.Float('Costo')
     direct_cost = fields.Float('Costo Directo Unitario')
     indirect_cost = fields.Float('Costo Indirecto Unitario')
@@ -144,6 +228,9 @@ class MrpBomCostLine(models.Model):
     total_direct_cost = fields.Float('Costo Directo Total')
     total_indirect_cost = fields.Float('Costo Indirecto Total')
     line_type = fields.Char('Tipo Componente')
+    update_date = fields.Date('Fecha actualizacion',compute=_compute_update_date)
+    tag_ids = fields.Many2many(comodel_name='product.tag',relname='tag_item_rel',col1='item_id',col2='tag_id',string='Tags')
+    active = fields.Boolean('Active',default=True)
 
 class ProductProductCost(models.Model):
     _inherit = 'product.product.cost'
