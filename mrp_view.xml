@@ -111,7 +111,7 @@
 		<field name="name">Costos de Productos</field>
 		<field name="res_model">mrp.bom.cost</field>
 		<field name="view_mode">tree,form</field>
-		<field name="domain">[('temporary','=',True)]</field>
+		<field name="domain">[('temporary','=',False)]</field>
 	</record>
 
 

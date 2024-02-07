@@ -219,7 +219,7 @@ class MrpBomCostLine(models.Model):
     product_id = fields.Many2one('product.product',string='Componente')
     bom_id = fields.Many2one('mrp.bom',string='BoM')
     qty = fields.Float('Cantidad')
-    price_unit = fields.Float('Precio Unitario')
+    price_unit = fields.Float('Costo Unitario')
     standard_price = fields.Float('Costo')
     direct_cost = fields.Float('Costo Directo Unitario')
     indirect_cost = fields.Float('Costo Indirecto Unitario')
