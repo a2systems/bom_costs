@@ -131,6 +131,11 @@ class MrpBomCost(models.Model):
 
 
 
+    @api.onchange('line_ids.direct_cost','line_ids.indirect_cost')
+    def onchange_costs(self):
+        for line in self.line_ids:
+            line.price_unit = line.direct_cost + line.indirect_cost
+
     name = fields.Char('Nombre')
     bom_id = fields.Many2one('mrp.bom',string='Lista de Materiales')
     product_tmpl_id = fields.Many2one('product.template',string='Producto',related='bom_id.product_tmpl_id')
@@ -172,7 +177,10 @@ class MrpBomCostLine(models.Model):
     def _compute_line_item(self):
         for rec in self:
             res = 0
-            items = self.env['mrp.bom.cost.line'].search([('cost_id','=',rec.cost_id.id),('id','<',rec.id)])
+            if rec._origin.id:
+                items = self.env['mrp.bom.cost.line'].search([('cost_id','=',rec.cost_id.id),('id','<',rec._origin.id)])
+            else:
+                items = self.env['mrp.bom.cost.line'].search([('cost_id','=',rec.cost_id.id),('id','<',rec.id)])
             if items:
                 res = len(items)
             rec.line_item = res + 1
@@ -213,6 +221,9 @@ class MrpBomCostLine(models.Model):
                 'target': 'new',
             }
 
+    @api.onchange('direct_cost','indirect_cost')
+    def onchange_costs(self):
+        self.price_unit = self.direct_cost + self.indirect_cost
 
     line_item = fields.Integer('#',compute=_compute_line_item)
     cost_id = fields.Many2one('mrp.bom.cost',string='Costo')
