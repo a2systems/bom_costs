@@ -2,6 +2,24 @@ from odoo import tools, models, fields, api, _
 from odoo.exceptions import ValidationError
 from datetime import date,datetime
 
+class ProductProduct(models.Model):
+    _inherit = 'product.product'
+
+    def write(self, vals):
+        res = super(ProductProduct, self).write(vals)
+        if 'standard_price' in vals:
+            for rec in self:
+                vals = {
+                    #'cost_id': self.id,
+                    'product_id': rec.id,
+                    'date': str(date.today()),
+                    'total_unit_cost': rec.standard_price,
+                   # 'direct_cost': line.direct_cost,
+                   # 'indirect_cost': line.indirect_cost,
+                    }
+                cost_id = self.env['product.product.cost'].create(vals)
+        return res
+
 
 class MrpBom(models.Model):
     _inherit = "mrp.bom"
@@ -48,24 +66,24 @@ class MrpBomCost(models.Model):
 
     def btn_update_costs(self):
         self.ensure_one()
+        standard_price = 0
         for line in self.line_ids.filtered(lambda l: l.bom_id.id == self.bom_id.id):
             product_id = line.product_id
             product_id.standard_price = line.price_unit
             product_id.indirect_cost = line.indirect_cost
             product_id.direct_cost = line.direct_cost
-            cost_id = self.env['product.product.cost'].search([('cost_id','=',self.id),('product_id','=',product_id.id)])
-            vals = {
-                'cost_id': self.id,
-                'product_id': product_id.id,
-                'date': str(date.today()),
-                'total_unit_cost': line.standard_price,
-                'direct_cost': line.direct_cost,
-                'indirect_cost': line.indirect_cost,
-                }
-            if cost_id:
-                cost_id.write(vals)
-            else:
-                cost_id = self.env['product.product.cost'].create(vals)
+            standard_price = standard_price + line.price_unit
+        product_id = self.product_id
+        product_id.standard_price = standard_price
+        vals = {
+            'cost_id': self.id,
+            'product_id': product_id.id,
+            'date': str(date.today()),
+            'total_unit_cost': line.price_unit,
+            'direct_cost': line.direct_cost,
+            'indirect_cost': line.indirect_cost,
+            }
+        cost_id = self.env['product.product.cost'].create(vals)
 
 
 
