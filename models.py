@@ -84,6 +84,7 @@ class MrpBomCost(models.Model):
             'indirect_cost': line.indirect_cost,
             }
         cost_id = self.env['product.product.cost'].create(vals)
+                
 
 
 
@@ -121,6 +122,8 @@ class MrpBomCost(models.Model):
                 res = res + item.price_unit * item.qty
                 res1 = res1 + item.total_direct_cost
                 res2 = res2 + item.total_indirect_cost
+            if rec.product_tmpl_id.standard_price != res:
+                res = rec.product_tmpl_id.standard_price
             rec.total_cost = res
             rec.total_direct_cost = res1
             rec.total_indirect_cost = res2
@@ -147,6 +150,26 @@ class MrpBomCost(models.Model):
         lines = self.env['mrp.bom.cost.line'].search([('cost_id','=',self.id),('bom_id','!=',self.bom_id.id)])
         lines.write({'active': False})
 
+    def btn_analyze_impact(self):
+        self.ensure_one()
+        for impact in self.impact_ids:
+            impact.unlink()
+        process = True
+        product_ids = self.product_id.ids
+        while process:
+            bom_lines = self.env['mrp.bom.line'].search([('product_id','in',product_ids)])
+            product_ids = []
+            if bom_lines:
+                for bom_line in bom_lines:
+                    vals = {
+                        'cost_id': self.id,
+                        'bom_id': bom_line.bom_id.id,
+                        }
+                    self.env['mrp.bom.cost.impact'].create(vals)
+                    product_ids.append(bom_line.bom_id.product_id.id)
+            else:
+                process = False
+
 
 
     @api.onchange('line_ids.direct_cost','line_ids.indirect_cost')
@@ -166,6 +189,16 @@ class MrpBomCost(models.Model):
     total_indirect_cost = fields.Float('Costo Indirecto Total',compute=_compute_items)
     temporary = fields.Boolean('temporary',default=False)
     only_components = fields.Boolean('Only components',default=False)
+    impact_ids = fields.One2many(comodel_name='mrp.bom.cost.impact',inverse_name='cost_id',string='Impacto')
+
+class MrpBomCostImpact(models.Model):
+    _name = 'mrp.bom.cost.impact'
+    _description = 'mrp.bom.cost.impact'
+
+    cost_id = fields.Many2one('mrp.bom.cost',string='Costo')
+    bom_id = fields.Many2one('mrp.bom',string='Lista de materiales')
+    product_id = fields.Many2one('product.product',string='Producto',related='bom_id.product_id')
+
 
 class MrpBomCostLine(models.Model):
     _name = 'mrp.bom.cost.line'
@@ -215,7 +248,7 @@ class MrpBomCostLine(models.Model):
                 'view_mode': 'form',
                 'res_id': res_id,
                 'type': 'ir.actions.act_window',
-                'target': 'new',
+                'target': 'fullscreen',
             }
         else:
             view_id = self.env.ref('mrp_bom_costs.mrp_bom_cost_form').id
@@ -236,7 +269,7 @@ class MrpBomCostLine(models.Model):
                 'view_mode': 'form',
                 'res_id': res_id.id,
                 'type': 'ir.actions.act_window',
-                'target': 'new',
+                'target': 'fullscreen',
             }
 
     @api.onchange('direct_cost','indirect_cost')
