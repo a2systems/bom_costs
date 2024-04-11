@@ -63,6 +63,7 @@ class MrpBom(models.Model):
 class MrpBomCost(models.Model):
     _name = 'mrp.bom.cost'
     _description = 'mrp.bom.cost'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
 
     def btn_update_costs(self):
         self.ensure_one()
